@@ -8,7 +8,7 @@ The Inventory Tracking System is designed to manage product inventory and stock 
 
 The project is implemented in three versions:
 - **v1**: A single-store inventory tracker with basic functionality.
-- **v2**: Support for 500+ stores with a central product catalog (to be implemented).
+- **v2**: Support for 500+ stores with a central product catalog and store-specific stock.
 - **v3**: A horizontally scalable system for thousands of stores with advanced features (to be implemented).
 
 ---
@@ -47,7 +47,7 @@ Below is a screenshot of the v1 dashboard, showing the product list and forms fo
 - **Docker for Database and App**:
   Initially, I considered using Docker solely for managing the PostgreSQL database locally, as it provides a consistent environment for development and testing. However, I realized that packaging the entire application (both the database and the Next.js app) in Docker would offer additional benefits. By containerizing the whole app, I ensured that the entire system could be easily set up and run with a single command (`docker-compose up -d`), reducing environment-related issues and making the setup process more reliable for deployment and collaboration. This decision also prepares the project for future deployment scenarios in v2 and v3, where containerization will be valuable for scaling.
 - **Tailwind CSS**: Used for quick, responsive styling of the frontend dashboard, keeping the UI simple and functional.
-- **Centralized DB Logic**: All database interactions are centralized in `src/lib/db.ts`, making the code maintainable and reusable for future versions.
+- **Centralized DB Logic**: All database interactions are centralized in `app/lib/db.ts`, making the code maintainable and reusable for future versions.
 - **ES Modules**: The project uses ES modules (`"type": "module"` in `package.json`) for modern JavaScript compatibility and consistency with Next.js.
 
 ### Assumptions
@@ -113,30 +113,174 @@ The v1 backend exposes the following REST API endpoints:
 ---
 
 ## Version 2: 500+ Stores with Central Product Catalog
-*To be implemented.*
 
 ### Overview
-Version 2 will extend the system to support 500+ stores with a central product catalog and store-specific stock. It will introduce REST API endpoints for filtering and reporting, basic authentication, request throttling, and a cloud-hosted relational database (Neon Postgres).
+Version 2 builds upon the foundation of v1 to support 500+ stores with a central product catalog and store-specific stock management. I carried out the development of v2 from v1, introducing user authentication, store management, enhanced reporting, and performance optimizations to handle increased scale. The system now supports multiple stores per user, allowing each store to have its own product catalog and stock movements, while providing filtering and reporting capabilities.
 
 ### Tech Stack
-- Next.js (TypeScript)
-- Prisma with Neon Postgres
-- NextAuth.js for authentication
-- Vercel for deployment
+- **Framework**: Next.js (TypeScript) with API routes for the backend and a responsive frontend.
+- **ORM**: Prisma with Prisma Accelerate for optimized database queries.
+- **Database**: Neon Postgres (cloud-hosted PostgreSQL).
+- **Authentication**: NextAuth.js with Google and GitHub OAuth.
+- **Styling**: Tailwind CSS for the frontend.
+- **Deployment**: The app has been deployed to a production environment.
 
 ### Features
-- Support for multiple stores
-- Filtering and reporting by store and date range
-- Basic authentication and request throttling
+- **Core Functionality**:
+  - Support for multiple stores per user.
+  - Add a product or increase stock (stock-in) for a specific store.
+  - Record a sale (reduce stock) for a specific store.
+  - Manually remove stock from a specific store.
+  - View all products and their current quantities for a selected store.
+  - Create a new store via the dashboard.
+- **Standout Features**:
+  - **Authentication**: Added user authentication with Google and GitHub OAuth using NextAuth.js.
+  - **Store-Specific Management**: Users can manage multiple stores, with each store having its own product catalog and stock movements.
+  - **Filtering and Reporting**: Added a reporting section to filter stock movements by store and date range.
+  - **Request Throttling**: Implemented middleware to limit API requests to 100 per minute per user, ensuring fair usage.
+  - **Low Stock Alerts**: Retained from v1, with alerts logged to the server console when a product’s stock falls below 10 units.
+  - **Performance Optimization**: Integrated Prisma Accelerate with a max connection pool size of 10 for optimized database queries.
+
+### Repository Structure
+- **`app/lib/types.ts`**: Centralized TypeScript interfaces (e.g., `Product`, `Store`, `StockMovement`) for type safety and reusability across the app.
+- **`app/lib/db.ts`**: Centralized database logic, encapsulating all Prisma interactions for maintainability and scalability.
+- **`app/api/`**: Contains all API routes (e.g., `stock-in`, `sale`, `manual-removal`, `products`, `stores`, `reports/stock-movements`).
+- **`app//`**: Frontend pages, with `index.tsx` as the main dashboard and `login/page.tsx` for authentication.
+- **`prisma/schema.prisma`**: Prisma schema defining the database structure, including `User`, `Store`, `Product`, and `StockMovement` models.
+
+### Frontend Screenshot
+Below is a screenshot of the v2 dashboard, showing the updated interface with store selection, product management, and stock movement reporting.
+
+![v2 Dashboard Screenshot](docs/screenshot-v2.png)
 
 ### Design Decisions
-*TBD*
+- **Next.js and TypeScript**: Retained from v1 for full-stack development and type safety. TypeScript interfaces are centralized in `app/lib/types.ts` for better code organization.
+- **Prisma with Neon Postgres and Accelerate**:
+  - Transitioned from a local PostgreSQL instance to Neon Postgres, a cloud-hosted database, to support the scale of 500+ stores.
+  - Integrated Prisma Accelerate with a max connection pool size of 10 to optimize database query performance, especially for filtering and reporting.
+  - Prisma schema updated to include `User` and `Store` models, enabling multi-store support with store-specific product catalogs.
+- **Authentication with NextAuth.js**:
+  - Added user authentication using NextAuth.js, supporting Google and GitHub OAuth for secure and seamless login.
+  - Simplified the login page to include only Google and GitHub sign-in options, removing manual signup/login.
+- **Request Throttling**: Implemented middleware using `rate-limiter-flexible` to limit API requests to 100 per minute per user, preventing abuse and ensuring fair usage.
+- **Centralized DB Logic**: Retained from v1, with all database interactions in `app/lib/db.ts`, now extended to support store-specific operations and filtering.
+- **Tailwind CSS**: Continued using Tailwind CSS for responsive and consistent styling across the dashboard and login page.
+- **Deployment**: Deployed the app to a production environment, ensuring the system is accessible and performant for real-world usage.
+
+### Setup Prisma with Accelerate
+This project uses Prisma with the Accelerate extension for optimized database queries, configured with a maximum connection pool size of 10.
+
+#### Prerequisites
+- Use Prisma version 5.2.0 or higher for optimal results.
+
+#### Installation
+1. Install Prisma, Prisma Client, and the Accelerate extension:
+   ```bash
+   npm install prisma @prisma/client@latest @prisma/extension-accelerate
+   ```
+2. Generate the Prisma Client for Accelerate:
+   ```bash
+   npx prisma generate --no-engine
+   ```
+3. Extend your Prisma Client instance with Accelerate in `app/lib/db.ts`:
+   ```typescript
+   import { PrismaClient } from '@prisma/client/edge';
+   import { withAccelerate } from '@prisma/extension-accelerate';
+
+   const prisma = new PrismaClient().$extends(withAccelerate());
+   ```
+4. Add caching to your Accelerate queries (example):
+   ```typescript
+   await prisma.product.findMany({
+     where: { storeId: 'some-store-id' },
+     cacheStrategy: { ttl: 60 },
+   });
+   ```
+5. View project usage in the Prisma Accelerate insights tab. For more details, refer to the [Prisma Accelerate documentation](https://www.prisma.io/docs/accelerate).
+
+#### Configuration
+- **Max Connection Pool Size**: Set to 10 to optimize performance for this application.
 
 ### Assumptions
-*TBD*
+- Each user can manage multiple stores, and each store has its own product catalog and stock movements.
+- The system handles approximately 500 stores, with moderate transaction volumes (e.g., 100 transactions per store per day).
+- Product IDs are still manually provided by the user for simplicity, but they are now scoped to a specific store.
+- Low stock alerts remain console-based in v2, with potential UI integration in v3.
+- Date range filtering for stock movements assumes ISO date strings for simplicity.
 
 ### API Design
-*TBD*
+The v2 backend extends the v1 API with additional endpoints and parameters to support multi-store functionality and reporting:
+
+| Method | Endpoint                       | Description                          | Request Body/Params                          | Response                                   |
+|--------|--------------------------------|--------------------------------------|----------------------------------------------|--------------------------------------------|
+| POST   | `/api/stock-in`               | Add a product or increase stock     | `{ "productId": "string", "name": "string", "quantity": number, "storeId": "string" }` | `{ "message": "string", "product": Product }` |
+| POST   | `/api/sale`                   | Record a sale (reduce stock)        | `{ "productId": "string", "quantity": number, "storeId": "string" }` | `{ "message": "string", "product": Product }` |
+| POST   | `/api/manual-removal`         | Manually remove stock               | `{ "productId": "string", "quantity": number, "storeId": "string" }` | `{ "message": "string", "product": Product }` |
+| GET    | `/api/products?storeId`       | Fetch products for a store          | Query: `storeId` (string)                    | `Product[]`                                |
+| GET    | `/api/stores`                 | Fetch all stores for a user         | None                                         | `Store[]`                                  |
+| POST   | `/api/stores`                 | Create a new store                  | `{ "name": "string" }`                       | `{ "message": "string", "store": Store }`  |
+| GET    | `/api/reports/stock-movements`| Fetch stock movements with filters  | Query: `storeId` (string), `startDate` (ISO string, optional), `endDate` (ISO string, optional) | `StockMovement[]`                   |
+
+**Updated Product Schema**:
+- `id`: string (e.g., `prod1`)
+- `name`: string (e.g., `Rice`)
+- `currentQuantity`: number (e.g., `50`)
+- `storeId`: string (references Store)
+
+**Updated StockMovement Schema**:
+- `id`: string (auto-generated UUID)
+- `productId`: string (references Product)
+- `storeId`: string (references Store)
+- `type`: string (`STOCK_IN`, `SALE`, `MANUAL_REMOVAL`)
+- `quantity`: number
+- `timestamp`: string (ISO date)
+
+**Store Schema**:
+- `id`: string (auto-generated UUID)
+- `name`: string (e.g., `Main Store`)
+- `userId`: string (references User)
+
+**User Schema**:
+- `id`: string (auto-generated UUID)
+- `email`: string (unique)
+- `name`: string (optional)
+- `oauthProvider`: string (e.g., `google`, `github`)
+- `oauthId`: string (provider-specific ID)
+
+### Setup and Running
+1. **Clone the Repository**:
+   ```bash
+   git clone https://github.com/msaadg/bazaar.git
+   ```
+
+2. **Install Dependencies**:
+   ```bash
+   npm install
+   ```
+
+3. **Set Up Environment Variables**:
+   Create a `.env` file in the root directory:
+   ```
+   DATABASE_URL="postgresql://<user>:<password>@<neon-host>/inventory?schema=public"
+   NEXTAUTH_SECRET="your-secret-key-here"
+   NEXTAUTH_URL="http://localhost:3000"
+   GOOGLE_CLIENT_ID="your-google-client-id"
+   GOOGLE_CLIENT_SECRET="your-google-client-secret"
+   GITHUB_CLIENT_ID="your-github-client-id"
+   GITHUB_CLIENT_SECRET="your-github-client-secret"
+   ```
+
+4. **Apply Database Migrations**:
+   ```bash
+   npx prisma migrate dev --name update_users_and_stores
+   ```
+
+5. **Run the App Locally**:
+   ```bash
+   npm run dev
+   ```
+   - Open `http://localhost:3000` to view the app.
+   - Sign in with Google or GitHub, add a store, and manage inventory for each store.
 
 ---
 
@@ -174,10 +318,11 @@ Version 3 will scale the system to support thousands of stores with concurrent o
 ## Evolution Rationale (v1 → v3)
 
 ### From v1 to v2
-- **Scalability**: v1 is designed for a single store with a local PostgreSQL instance. v2 will scale to 500+ stores by introducing a cloud-hosted relational database (Neon Postgres) and a central product catalog, allowing store-specific stock management.
-- **Security**: v1 lacks authentication, as it’s a single-store system. v2 will add basic authentication (using NextAuth.js) and request throttling to handle increased usage.
-- **Functionality**: v2 will introduce filtering and reporting by store and date range, addressing the need for better inventory insights across multiple stores.
-- **Deployment**: v1 uses Docker for local development. v2 will deploy to Vercel, aligning with Next.js’s ecosystem and Bazaar’s likely deployment strategy.
+- **Scalability**: v1 is designed for a single store with a local PostgreSQL instance. v2 scales to 500+ stores by introducing a cloud-hosted relational database (Neon Postgres) and a central product catalog with store-specific stock management, supported by Prisma Accelerate for performance.
+- **Security**: v1 lacks authentication, as it’s a single-store system. v2 adds authentication with Google and GitHub OAuth using NextAuth.js, along with request throttling (100 requests per minute per user) to handle increased usage.
+- **Functionality**: v2 introduces store management, allowing users to create and manage multiple stores, and adds filtering and reporting by store and date range for better inventory insights.
+- **Deployment**: v1 uses Docker for local development. v2 deploys to a production environment, aligning with Next.js’s ecosystem and Bazaar’s likely deployment strategy.
+- **Code Organization**: v2 improves maintainability by centralizing types in `app/lib/types.ts` and database logic in `app/lib/db.ts`, preparing the codebase for further scaling in v3.
 
 ### From v2 to v3
 - **Scalability and Performance**: v2 supports 500+ stores but may struggle with thousands of stores and concurrent operations. v3 will introduce horizontal scalability, read/write separation, and caching (Redis) to handle high transaction volumes.
