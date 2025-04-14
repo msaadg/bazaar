@@ -285,33 +285,97 @@ The v2 backend extends the v1 API with additional endpoints and parameters to su
 ---
 
 ## Version 3: Scalable System for Thousands of Stores
-*To be implemented.*
+
+*Proposed Architecture, Not Implemented
 
 ### Overview
-Version 3 will scale the system to support thousands of stores with concurrent operations, near real-time stock sync, and audit logs. It will introduce horizontal scalability, asynchronous updates, caching, and advanced security features.
+Version 3 extends the system to support thousands of stores with concurrent operations, near real-time stock synchronization, and audit logs. I propose a theoretical architecture to handle the scale of thousands of users and stores, focusing on horizontal scalability, asynchronous updates, and advanced performance optimizations. This version builds on v2 by introducing a distributed system design to ensure reliability, scalability, and real-time visibility.
 
 ### Tech Stack
-- Next.js (TypeScript) on Vercel
-- Prisma with Neon Postgres (read/write separation)
-- Upstash (Redis) for caching
-- Kafka (Confluent Cloud) for event-driven updates
-- Pusher for real-time dashboard updates
+- **Framework**: Next.js (TypeScript) with microservices architecture on Kubernetes.
+- **ORM**: Prisma with Neon Postgres (read/write separation).
+- **Caching**: Upstash (Redis) for caching frequently accessed data.
+- **Event-Driven Updates**: Kafka (Confluent Cloud) for asynchronous stock updates.
+- **Real-Time Updates**: Pusher for WebSocket-based dashboard updates.
+- **Deployment**: Kubernetes for horizontal scaling and autoscaling.
 
 ### Features
-- Horizontal scalability
-- Asynchronous stock updates (event-driven)
-- Caching and read/write separation
-- Audit logs
-- Real-time dashboard updates via WebSockets
+- **Core Functionality**:
+  - Support for thousands of stores with concurrent operations.
+  - Near real-time stock synchronization across all stores.
+  - Comprehensive audit logs for all stock movements.
+- **Standout Features**:
+  - **Horizontal Scalability**: Deployed on Kubernetes with autoscaling to handle traffic spikes.
+  - **Asynchronous Updates**: Event-driven stock updates using Kafka for eventual consistency.
+  - **Caching and Read/Write Separation**: Redis caching and Neon Postgres read replicas for performance.
+  - **Real-Time Dashboard**: WebSocket updates via Pusher for live stock visibility.
+  - **Advanced Rate Limiting**: API rate limits with Redis-backed quotas per user.
 
 ### Design Decisions
-*TBD*
+- **Microservices Architecture on Kubernetes**:
+  - Transition from a monolithic Next.js app to a microservices architecture, splitting services (e.g., authentication, inventory, reporting) for better scalability.
+  - Kubernetes enables horizontal scaling and autoscaling, ensuring the system can handle thousands of stores and concurrent users.
+  - Trade-off: Increased complexity in managing microservices, but necessary for scalability and fault tolerance.
+- **Event-Driven Updates with Kafka**:
+  - Use Kafka to handle asynchronous stock updates, ensuring eventual consistency across stores.
+  - Producers publish stock events (e.g., stock-in, sale) to Kafka topics, and consumers update the database and cache.
+  - Trade-off: Eventual consistency may lead to temporary discrepancies, but it ensures high throughput and scalability.
+- **Caching and Read/Write Separation**:
+  - Implement Redis (Upstash) caching for frequently accessed data (e.g., product lists, stock levels) to reduce database load.
+  - Use Neon Postgres with read replicas for read-heavy operations (e.g., reporting, dashboard queries) and a primary instance for writes.
+  - Trade-off: Adds complexity with cache invalidation, but significantly improves read performance for thousands of users.
+- **Real-Time Updates with Pusher**:
+  - Integrate Pusher for WebSocket-based updates, enabling near real-time stock visibility on the dashboard.
+  - Trade-off: WebSockets increase server resource usage, but they are essential for real-time user experience.
+- **Audit Logs and Rate Limiting**:
+  - Add an `AuditLog` model in the Prisma schema to capture all stock movements, including user, action, and timestamp.
+  - Implement advanced API rate limiting using Redis to enforce per-user quotas (e.g., 500 requests/minute), building on v2’s throttling.
+  - Trade-off: Audit logs increase storage requirements, but they are critical for accountability in a large-scale system.
 
 ### Assumptions
-*TBD*
+- The system handles thousands of stores, with high transaction volumes (e.g., 1,000 transactions per store per day).
+- Users expect near real-time stock updates, but eventual consistency is acceptable for stock synchronization.
+- Audit logs are stored indefinitely, with potential archival strategies (e.g., offloading to S3) for cost efficiency.
+- Network latency and occasional failures are mitigated by Kubernetes’ self-healing and Kafka’s fault tolerance.
 
 ### API Design
-*TBD*
+The v3 backend extends the v2 API with additional endpoints and optimizations for scalability:
+
+| Method | Endpoint                       | Description                          | Request Body/Params                          | Response                                   |
+|--------|--------------------------------|--------------------------------------|----------------------------------------------|--------------------------------------------|
+| GET    | `/api/audit-logs`             | Fetch audit logs with filters       | Query: `storeId` (string), `startDate` (ISO string), `endDate` (ISO string) | `AuditLog[]`                              |
+| GET    | `/api/stock-sync`             | Fetch real-time stock levels        | Query: `storeId` (string), `productId` (string) | `{ "productId": "string", "quantity": number }` |
+| POST   | `/api/stock-in`               | Add stock (async via Kafka)         | `{ "productId": "string", "name": "string", "quantity": number, "storeId": "string" }` | `{ "message": "Stock update queued" }` |
+| POST   | `/api/sale`                   | Record a sale (async via Kafka)     | `{ "productId": "string", "quantity": number, "storeId": "string" }` | `{ "message": "Sale update queued" }` |
+
+**AuditLog Schema** (Proposed):
+- `id`: string (auto-generated UUID)
+- `userId`: string (references User)
+- `storeId`: string (references Store)
+- `action`: string (e.g., `STOCK_IN`, `SALE`)
+- `details`: JSON (e.g., `{ "productId": "prod1", "quantity": 10 }`)
+- `timestamp`: string (ISO date)
+
+### Setup and Running (Theoretical)
+1. **Deploy Infrastructure**:
+   - Set up Kubernetes cluster with autoscaling enabled.
+   - Configure Neon Postgres with read replicas and Prisma Accelerate.
+   - Deploy Kafka cluster (Confluent Cloud) and Redis (Upstash).
+2. **Environment Variables**:
+   ```
+   DATABASE_URL="postgresql://<user>:<password>@<neon-host>/inventory?schema=public"
+   KAFKA_BROKERS="broker1:9092,broker2:9092"
+   REDIS_URL="redis://<user>:<password>@<upstash-host>:6379"
+   PUSHER_APP_ID="your-pusher-app-id"
+   PUSHER_KEY="your-pusher-key"
+   PUSHER_SECRET="your-pusher-secret"
+   ```
+3. **Run Microservices**:
+   - Deploy each microservice (e.g., inventory, reporting) on Kubernetes.
+   - Use Helm charts for streamlined deployment and management.
+4. **Monitor and Scale**:
+   - Use Kubernetes Horizontal Pod Autoscaler (HPA) to scale based on CPU/memory usage.
+   - Monitor Kafka consumer lag and Redis cache hit rate for performance tuning.
 
 ---
 
@@ -325,10 +389,11 @@ Version 3 will scale the system to support thousands of stores with concurrent o
 - **Code Organization**: v2 improves maintainability by centralizing types in `app/lib/types.ts` and database logic in `app/lib/db.ts`, preparing the codebase for further scaling in v3.
 
 ### From v2 to v3
-- **Scalability and Performance**: v2 supports 500+ stores but may struggle with thousands of stores and concurrent operations. v3 will introduce horizontal scalability, read/write separation, and caching (Redis) to handle high transaction volumes.
-- **Real-Time Updates**: v3 will add asynchronous updates using Kafka for event-driven stock sync and WebSockets (Pusher) for real-time dashboard updates, ensuring near real-time visibility.
-- **Auditability**: v3 will include audit logs to track all stock movements, addressing the need for accountability in a large-scale system.
-- **Security and Reliability**: v3 will enhance security with API rate limiting, advanced authentication, and data integrity measures to support high concurrency.
+- **Scalability and Performance**: v2 supports 500+ stores but may struggle with thousands of stores and concurrent operations. v3 introduces a microservices architecture on Kubernetes, read/write separation with Neon Postgres, and Redis caching to handle high transaction volumes.
+- **Real-Time Updates**: v3 adds asynchronous updates using Kafka for event-driven stock sync and WebSockets (Pusher) for real-time dashboard updates, ensuring near real-time visibility across thousands of stores.
+- **Auditability**: v3 includes audit logs via a new `AuditLog` model, capturing all stock movements for accountability and compliance.
+- **Security and Reliability**: v3 enhances security with advanced API rate limiting (Redis-backed), improved authentication, and Kubernetes’ self-healing for high availability.
+- **Architecture**: v2’s monolithic design evolves into a microservices architecture in v3, enabling independent scaling of services like inventory and reporting.
 
 ### Overall Evolution
 The system evolves from a simple, single-store tracker (v1) to a multi-store platform (v2) and finally to a distributed, scalable system (v3). Each version builds on the previous one, adding features and infrastructure to meet Bazaar’s requirements for scalability, performance, and reliability.
