@@ -151,6 +151,7 @@ Version 2 builds upon the foundation of v1 to support 500+ stores with a central
 ### Frontend Screenshot
 Below is a screenshot of the v2 dashboard, showing the updated interface with store selection, product management, and stock movement reporting.
 
+![v2 Login Screenshot](docs/screenshot-v2-1.png)
 ![v2 Dashboard Screenshot](docs/screenshot-v2.png)
 
 ### Design Decisions
