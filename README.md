@@ -1,3 +1,5 @@
+*Updated Deployment Here: [bazaar-pink.vercel.app](https://bazaar-pink.vercel.app/)
+
 # Inventory Tracking System
 
 This project is a solution to the Bazaar Technologies Engineering Case Study Challenge, focused on building a scalable Inventory Tracking System. The system evolves from a single-store inventory tracker (v1) to a multi-store platform (v2) and eventually a large-scale distributed system supporting thousands of stores (v3).
