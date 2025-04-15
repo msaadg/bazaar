@@ -1,3 +1,6 @@
+>"Talk is cheap. Show me the code."
+>   ~ Linus Torvalds
+
 *Updated Deployment Here: [bazaar-pink.vercel.app](https://bazaar-pink.vercel.app/)
 
 # Inventory Tracking System
